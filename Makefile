@@ -2,6 +2,7 @@ SERVER_OUT := "bin/server"
 CLIENT_OUT := "bin/client"
 API_OUT := "api/api.pb.go"
 API_REST_OUT := "api/api.pb.gw.go"
+API_SWAG_OUT := "api/api.swagger.json"
 PKG := "gitlab.com/pantomath-io/demo-grpc"
 SERVER_PKG_BUILD := "${PKG}/server"
 CLIENT_PKG_BUILD := "${PKG}/client"
@@ -25,7 +26,14 @@ api/api.pb.gw.go: api/api.proto
 		--grpc-gateway_out=logtostderr=true:api \
 		api/api.proto
 
-api: api/api.pb.go api/api.pb.gw.go ## Auto-generate grpc go sources
+api/api.swagger.json: api/api.proto
+	@protoc -I api/ \
+		-I${GOPATH}/src \
+		-I${GOPATH}/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis \
+		--swagger_out=logtostderr=true:api \
+		api/api.proto
+
+api: api/api.pb.go api/api.pb.gw.go api/api.swagger.json ## Auto-generate grpc go sources
 
 dep: ## Get the dependencies
 	@go get -v -d ./...
@@ -37,7 +45,7 @@ client: dep api ## Build the binary file for client
 	@go build -i -v -o $(CLIENT_OUT) $(CLIENT_PKG_BUILD)
 
 clean: ## Remove previous builds
-	@rm $(SERVER_OUT) $(CLIENT_OUT) $(API_OUT) $(API_REST_OUT)
+	@rm $(SERVER_OUT) $(CLIENT_OUT) $(API_OUT) $(API_REST_OUT) $(API_SWAG_OUT)
 
 help: ## Display this help screen
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
