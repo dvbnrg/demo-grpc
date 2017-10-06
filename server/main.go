@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"strings"
+
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 
 	"golang.org/x/net/context"
 
@@ -20,6 +23,13 @@ type contextKey int
 const (
 	clientIDKey contextKey = iota
 )
+
+func credMatcher(headerName string) (mdName string, ok bool) {
+	if headerName == "Login" || headerName == "Password" {
+		return headerName, true
+	}
+	return "", false
+}
 
 // authenticateAgent check the client credentials
 func authenticateClient(ctx context.Context, s *api.Server) (string, error) {
@@ -92,15 +102,51 @@ func startGRPCServer(address, certFile, keyFile string) error {
 	return nil
 }
 
+func startRESTServer(address, grpcAddress, certFile string) error {
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	mux := runtime.NewServeMux(runtime.WithIncomingHeaderMatcher(credMatcher))
+
+	creds, err := credentials.NewClientTLSFromFile(certFile, "")
+	if err != nil {
+		return fmt.Errorf("could not load TLS certificate: %s", err)
+	}
+
+	// Setup the client gRPC options
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
+
+	// Register ping
+	err = api.RegisterPingHandlerFromEndpoint(ctx, mux, grpcAddress, opts)
+	if err != nil {
+		return fmt.Errorf("could not register service Ping: %s", err)
+	}
+
+	log.Printf("starting HTTP/1.1 REST server on %s", address)
+	http.ListenAndServe(address, mux)
+
+	return nil
+}
+
 // main start a gRPC server and waits for connection
 func main() {
 	grpcAddress := fmt.Sprintf("%s:%d", "localhost", 7777)
+	restAddress := fmt.Sprintf("%s:%d", "localhost", 7778)
 	certFile := "cert/server.crt"
 	keyFile := "cert/server.key"
 
 	// fire the gRPC server in a goroutine
 	go func() {
 		err := startGRPCServer(grpcAddress, certFile, keyFile)
+		if err != nil {
+			log.Fatalf("failed to start gRPC server: %s", err)
+		}
+	}()
+
+	// fire the REST server in a goroutine
+	go func() {
+		err := startRESTServer(restAddress, grpcAddress, certFile)
 		if err != nil {
 			log.Fatalf("failed to start gRPC server: %s", err)
 		}

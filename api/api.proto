@@ -13,6 +13,5 @@ service Ping {
         post: "/1/ping"
         body: "*"
     };
-
   }
 }
