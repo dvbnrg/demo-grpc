@@ -57,21 +57,20 @@ func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 	return handler(ctx, req)
 }
 
-// main start a gRPC server and waits for connection
-func main() {
-	// create a listener on TCP port 7777
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "localhost", 7777))
+func startGRPCServer(address, certFile, keyFile string) error {
+	// create a listener on TCP port
+	lis, err := net.Listen("tcp", address)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		return fmt.Errorf("failed to listen: %v", err)
 	}
 
 	// create a server instance
 	s := api.Server{}
 
 	// Create the TLS credentials
-	creds, err := credentials.NewServerTLSFromFile("cert/server.crt", "cert/server.key")
+	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 	if err != nil {
-		log.Fatalf("could not load TLS keys: %s", err)
+		return fmt.Errorf("could not load TLS keys: %s", err)
 	}
 
 	// Create an array of gRPC options with the credentials
@@ -85,7 +84,29 @@ func main() {
 	api.RegisterPingServer(grpcServer, &s)
 
 	// start the server
+	log.Printf("starting HTTP/2 gRPC server on %s", address)
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %s", err)
+		return fmt.Errorf("failed to serve: %s", err)
 	}
+
+	return nil
+}
+
+// main start a gRPC server and waits for connection
+func main() {
+	grpcAddress := fmt.Sprintf("%s:%d", "localhost", 7777)
+	certFile := "cert/server.crt"
+	keyFile := "cert/server.key"
+
+	// fire the gRPC server in a goroutine
+	go func() {
+		err := startGRPCServer(grpcAddress, certFile, keyFile)
+		if err != nil {
+			log.Fatalf("failed to start gRPC server: %s", err)
+		}
+	}()
+
+	// infinite loop
+	log.Printf("Entering infinite loop")
+	select {}
 }
