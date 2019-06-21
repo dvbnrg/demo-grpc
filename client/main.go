@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"gitlab.com/pantomath-io/demo-grpc/api"
+	"github.com/dvbnrg/demo-grpc/api"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
